@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -39,12 +38,32 @@ public static class ToDoApi
     }
 
     [FunctionName(nameof(GetTodoById))]
-    public static IActionResult GetTodoById([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo/{id}")] HttpRequest req, string id, ILogger log)
+    public static async Task<IActionResult> GetTodoById([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo/{id}")] HttpRequest req, string id, ILogger log)
     {
         log.LogInformation("Getting an todo for {Result}", id);
 
         var todo = ToDos.SingleOrDefault(x => x.Id == id);
-
+        await Task.CompletedTask;
+        
         return todo != null ? new OkObjectResult(todo) : new NotFoundObjectResult(new { id });
+    }
+
+    [FunctionName(nameof(MarkToDoAsDone))]
+    public static async Task<IActionResult> MarkToDoAsDone([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo/{id}")]HttpRequest req, string id, ILogger log)
+    {
+        log.LogInformation("Marking ToDo {Id} as completed", id);
+
+        var idx = ToDos.FindIndex(x => x.Id == id);
+
+        if (idx == -1)
+        {
+            return new NotFoundObjectResult(new { id });
+        }
+
+        ToDos[idx].IsCompleted = true;
+
+        await Task.CompletedTask;
+
+        return new NoContentResult();
     }
 }

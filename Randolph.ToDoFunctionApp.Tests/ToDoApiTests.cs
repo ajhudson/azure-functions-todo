@@ -1,4 +1,3 @@
-using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -11,16 +10,22 @@ using Xunit.Abstractions;
 namespace Randolph.ToDoFunctionApp.Tests;
 
 [TestCaseOrderer("Randolph.ToDoFunctionApp.Tests.UnitTestOrderers.AscendingNumberOrderer", "Randolph.ToDoFunctionApp.Tests")]
-public class ToDoApi : TestsBase, IClassFixture<StackFixture>
+public class ToDoApi : TestsBase, IClassFixture<IdFixture>
 {
+    private readonly Mock<HttpRequest> _httpRequest;
+
+    private readonly Mock<ILogger> _logger;
+    
     private readonly ITestOutputHelper _output;
 
-    private readonly StackFixture _stackFixture;
+    private readonly IdFixture _idFixture;
 
-    public ToDoApi(ITestOutputHelper output, StackFixture stackFixture)
+    public ToDoApi(ITestOutputHelper output, IdFixture idFixture)
     {
+        this._httpRequest = new Mock<HttpRequest>();
+        this._logger = new Mock<ILogger>();
         this._output = output;
-        this._stackFixture = stackFixture;
+        this._idFixture = idFixture;
     }
 
     [Fact]
@@ -28,25 +33,22 @@ public class ToDoApi : TestsBase, IClassFixture<StackFixture>
     public async Task ShouldAddTodo()
     {
         // Arrange
-        var logger = new Mock<ILogger>();
-        var httpReq = new Mock<HttpRequest>();
         var model = new CreateToDoModel { TaskDescription = "Do something nice" };
         var body = await CreateStreamForHttpRequest(model);
         
-        httpReq.Setup(x => x.Body).Returns(body);
+        this._httpRequest.Setup(x => x.Body).Returns(body);
 
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.CreateToDo(httpReq.Object, logger.Object) as CreatedAtRouteResult;
+        var response = await ToDoFunctionApp.ToDoApi.CreateToDo(this._httpRequest.Object, _logger.Object) as CreatedAtRouteResult;
 
         // Assert
         response.ShouldNotBeNull();
-        response.StatusCode.ShouldBe((int)HttpStatusCode.Created);
+        response.StatusCode.ShouldBe(StatusCodes.Status201Created);
 
         var responseModel = response.Value as ToDoModel;
         responseModel.ShouldNotBeNull();
-        this._stackFixture.Stack.Push(responseModel.Id);
+        this._idFixture.Id = responseModel.Id;
         this._output.WriteLine($"ToDo created with ID of {responseModel.Id}");
-        await Task.Delay(500);
     }
 
     [Fact]
@@ -54,23 +56,62 @@ public class ToDoApi : TestsBase, IClassFixture<StackFixture>
     public async Task ShouldGetAllToDos()
     {
         // Arrange
-        var logger = new Mock<ILogger>();
-        var httpReq = new Mock<HttpRequest>();
-
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.GetAllToDos(httpReq.Object, logger.Object) as OkObjectResult;
+        var response = await ToDoFunctionApp.ToDoApi.GetAllToDos(this._httpRequest.Object, this._logger.Object) as OkObjectResult;
 
         // Assert
         response.ShouldNotBeNull();
-        response.StatusCode.ShouldBe((int)HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(StatusCodes.Status200OK);
         
         var allToDos = response.Value as List<ToDoModel>;
         allToDos.ShouldNotBeNull();
-        var todo = allToDos.FirstOrDefault();
+        allToDos.Count.ShouldBe(1);
+        allToDos.Any(todo => todo.Id == this._idFixture.Id).ShouldBeTrue();
+    }
+
+    [Fact]
+    [OrderTestByAscendingNumber(3)]
+    public async Task ShouldGetToDoById()
+    {
+        // Arrange
+        // Act
+        var response = await ToDoFunctionApp.ToDoApi.GetTodoById(this._httpRequest.Object, this._idFixture.Id, this._logger.Object) as OkObjectResult;
+
+        // Assert
+        response.ShouldNotBeNull();
+        response.StatusCode.ShouldBe(StatusCodes.Status200OK);
+
+        var todo = response.Value as ToDoModel;
         todo.ShouldNotBeNull();
+        todo.Id.ShouldBe(this._idFixture.Id);
+        todo.IsCompleted.ShouldBeFalse();
+    }
 
-        var expectedId = this._stackFixture.Stack.Pop();
-        todo.Id.ShouldBe(expectedId);
+    [Fact]
+    [OrderTestByAscendingNumber(4)]
+    public async Task ShouldMarkToDoAsDone()
+    {
+        // Arrange
+        // Act
+        var response = await ToDoFunctionApp.ToDoApi.MarkToDoAsDone(this._httpRequest.Object, this._idFixture.Id, this._logger.Object) as NoContentResult;
+        
+        // Assert
+        response.ShouldNotBeNull();
+        response.StatusCode.ShouldBe(StatusCodes.Status204NoContent);
+    }
 
+    [Fact]
+    [OrderTestByAscendingNumber(5)]
+    public async Task ShouldReturnNotFoundForNonExistentToDo()
+    {
+        // Arrange
+        string id = Guid.NewGuid().ToString("n");
+        
+        // Act
+        var response = await ToDoFunctionApp.ToDoApi.MarkToDoAsDone(this._httpRequest.Object, id, this._logger.Object) as NotFoundObjectResult;
+        
+        // Assert
+        response.ShouldNotBeNull();
+        response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
     }
 }
