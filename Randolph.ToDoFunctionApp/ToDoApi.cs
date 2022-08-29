@@ -30,9 +30,10 @@ public static class ToDoApi
     }
 
     [FunctionName(nameof(GetAllToDos))]
-    public static IActionResult GetAllToDos([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo")] HttpRequest req, ILogger log)
+    public static async Task<IActionResult> GetAllToDos([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo")] HttpRequest req, ILogger log)
     {
         log.LogInformation("Getting all ToDo's");
+        await Task.CompletedTask;
 
         return new OkObjectResult(ToDos);
     }
