@@ -9,21 +9,29 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Randolph.ToDoFunctionApp.Models;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Randolph.ToDoFunctionApp;
 
 public static class ToDoApi
 {
-    private static List<ToDoModel> ToDos = new();
+    private static List<ToDoModel> _toDos = new();
+
+    public static List<ToDoModel> ToDos
+    {
+        get => _toDos;
+
+        set => _toDos = value;
+    }
 
     [FunctionName(nameof(CreateToDo))]
     public static async Task<IActionResult> CreateToDo([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo")] HttpRequest req, ILogger log)
     {
         log.LogInformation("Adding an item to the ToDo list");
         string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-        var input = JsonConvert.DeserializeObject<CreateToDoModel>(requestBody);
-        var todo = new ToDoModel { TaskDescription = input.TaskDescription };
-        ToDos.Add(todo);
+        var input = JsonSerializer.Deserialize<CreateToDoModel>(requestBody);
+        var todo = new ToDoModel { TaskDescription = input?.TaskDescription };
+        _toDos.Add(todo);
 
         return new CreatedAtRouteResult(nameof(GetAllToDos), todo);
     }
@@ -34,7 +42,7 @@ public static class ToDoApi
         log.LogInformation("Getting all ToDo's");
         await Task.CompletedTask;
 
-        return new OkObjectResult(ToDos);
+        return new OkObjectResult(_toDos);
     }
 
     [FunctionName(nameof(GetTodoById))]
@@ -42,7 +50,7 @@ public static class ToDoApi
     {
         log.LogInformation("Getting an todo for {Result}", id);
 
-        var todo = ToDos.SingleOrDefault(x => x.Id == id);
+        var todo = _toDos.SingleOrDefault(x => x.Id == id);
         await Task.CompletedTask;
         
         return todo != null ? new OkObjectResult(todo) : new NotFoundObjectResult(new { id });
@@ -53,16 +61,53 @@ public static class ToDoApi
     {
         log.LogInformation("Marking ToDo {Id} as completed", id);
 
-        var idx = ToDos.FindIndex(x => x.Id == id);
+        var idx = _toDos.FindIndex(x => x.Id == id);
 
         if (idx == -1)
         {
             return new NotFoundObjectResult(new { id });
         }
 
-        ToDos[idx].IsCompleted = true;
+        _toDos[idx].IsCompleted = true;
 
         await Task.CompletedTask;
+
+        return new NoContentResult();
+    }
+
+    [FunctionName(nameof(UpdateToDo))]
+    public static async Task<IActionResult> UpdateToDo([HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "todo/{id}")]HttpRequest req, string id, ILogger log)
+    {
+        log.LogInformation("Updating ToDo {Id}", id);
+
+        var idx = _toDos.FindIndex(x => x.Id == id);
+
+        if (idx == -1)
+        {
+            return new NotFoundObjectResult(new { id });
+        }
+
+        string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+        var todo = JsonSerializer.Deserialize<ToDoModel>(requestBody);
+
+        _toDos[idx] = todo;
+        
+        return new NoContentResult();
+    }
+
+    [FunctionName(nameof(DeleteToDo))]
+    public static async Task<IActionResult> DeleteToDo([HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "todo/{id}")]HttpRequest request, string id, ILogger log)
+    {
+        log.LogInformation("Deleting ToDo {Id}", id);
+
+        var todo = _toDos.SingleOrDefault(x => x.Id == id);
+
+        if (todo == null)
+        {
+            return new NotFoundObjectResult(new { id });
+        }
+
+        _toDos.Remove(todo);
 
         return new NoContentResult();
     }

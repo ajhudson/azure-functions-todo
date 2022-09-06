@@ -114,4 +114,71 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
         response.ShouldNotBeNull();
         response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
     }
+    
+    [Fact]
+    [OrderTestByAscendingNumber(6)]
+    public async Task ShouldReturnNotFoundWhenUpdateToDoIsCalled()
+    {
+        // Arrange
+        // Act
+        var response = await ToDoFunctionApp.ToDoApi.UpdateToDo(this._httpRequest.Object, Guid.NewGuid().ToString("n"), this._logger.Object) as NotFoundObjectResult;
+
+        // Assert
+        response.ShouldNotBeNull();
+        response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+    }
+    
+    [Fact]
+    [OrderTestByAscendingNumber(7)]
+    public async Task ShouldReturnNoContentWhenToDoIsUpdated()
+    {
+        // Arrange
+        var id = Guid.NewGuid().ToString("n");
+        var toDo = new ToDoModel { Id = id, TaskDescription = "Dusting", CreatedAt = DateTime.Now };
+        ToDoFunctionApp.ToDoApi.ToDos = new List<ToDoModel> { toDo };
+
+        toDo.TaskDescription = "Dusting and washing up";
+
+        var body = await CreateStreamForHttpRequest(toDo);
+        this._httpRequest.SetupGet(x => x.Body).Returns(body);
+
+        // Act
+        var response = await ToDoFunctionApp.ToDoApi.UpdateToDo(this._httpRequest.Object, id, this._logger.Object) as NoContentResult;
+
+        // Assert
+        response.ShouldNotBeNull();
+        response.StatusCode.ShouldBe(StatusCodes.Status204NoContent);        
+    }
+
+    [Fact]
+    [OrderTestByAscendingNumber(8)]
+    public async Task ShouldReturnNotFoundWhenDeleteToDoIsCalled()
+    {
+        // Arrange
+        var id = Guid.NewGuid().ToString("n");
+
+        // Act
+        var response = await ToDoFunctionApp.ToDoApi.DeleteToDo(this._httpRequest.Object, id, this._logger.Object) as NotFoundObjectResult;
+
+        // Assert
+        response.ShouldNotBeNull();
+        response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+    }
+
+    [Fact]
+    [OrderTestByAscendingNumber(9)]
+    public async Task ShouldReturnNoContentWhenToDoIsDeleted()
+    {
+        // Arrange
+        var id = Guid.NewGuid().ToString("n");
+        var todo = new ToDoModel { Id = id, CreatedAt = DateTime.Now, TaskDescription = "Declutter bookshelf" };
+        ToDoFunctionApp.ToDoApi.ToDos = new List<ToDoModel> { todo };
+        
+        // Act
+        var response = await ToDoFunctionApp.ToDoApi.DeleteToDo(this._httpRequest.Object, id, this._logger.Object) as NoContentResult;
+        
+        // Assert
+        response.ShouldNotBeNull();
+        response.StatusCode.ShouldBe(StatusCodes.Status204NoContent);
+    }
 }
