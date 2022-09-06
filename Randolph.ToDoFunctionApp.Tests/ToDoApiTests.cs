@@ -39,7 +39,7 @@ public class ToDoApiTests : TestsBase, IClassFixture<IdFixture>
         var mapper = mappingConfig.CreateMapper();
         this._toDoApi = new ToDoApi(mapper);
     }
-
+/*
     [Fact]
     [OrderTestByAscendingNumber(1)]
     public async Task ShouldAddTodo()
@@ -62,7 +62,7 @@ public class ToDoApiTests : TestsBase, IClassFixture<IdFixture>
         this._idFixture.Id = responseModel.Id;
         this._output.WriteLine($"ToDo created with ID of {responseModel.Id}");
     }
-
+    
     [Fact]
     [OrderTestByAscendingNumber(2)]
     public async Task ShouldGetAllToDos()
@@ -193,4 +193,5 @@ public class ToDoApiTests : TestsBase, IClassFixture<IdFixture>
         response.ShouldNotBeNull();
         response.StatusCode.ShouldBe(StatusCodes.Status204NoContent);
     }
+    */
 }

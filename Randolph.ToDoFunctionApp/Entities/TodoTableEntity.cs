@@ -1,11 +1,10 @@
 ﻿using System;
-using Microsoft.WindowsAzure.Storage.Table;
 
 namespace Randolph.ToDoFunctionApp.Entities;
 
-public class TodoTableEntity : TableEntity
+public class TodoTableEntity : BaseTableEntity
 {
-    public DateTime CreateDt { get; set; }
+    public DateTime CreatedDt { get; set; }
 
     public string TaskDescription { get; set; }
 

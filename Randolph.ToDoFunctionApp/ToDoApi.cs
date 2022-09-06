@@ -1,14 +1,14 @@
-﻿using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+﻿using System.IO;
 using System.Threading.Tasks;
 using AutoMapper;
+using Azure.Data.Tables;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Randolph.ToDoFunctionApp.Entities;
 using Randolph.ToDoFunctionApp.Models;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -18,32 +18,29 @@ public class ToDoApi
 {
     private readonly IMapper _mapper;
     
-    private static List<ToDoModel> _toDos = new();
-
-    public static List<ToDoModel> ToDos
-    {
-        get => _toDos;
-
-        set => _toDos = value;
-    }
-
     public ToDoApi(IMapper mapper)
     {
         this._mapper = mapper;
     }
 
     [FunctionName(nameof(CreateToDo))]
-    public async Task<IActionResult> CreateToDo([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo")] HttpRequest req, ILogger log)
+    public async Task<IActionResult> CreateToDo(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo")] HttpRequest req,
+        [Table(Constants.ToDoTableName)] TableClient table,
+        ILogger log)
     {
         log.LogInformation("Adding an item to the ToDo list");
         string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
         var input = JsonConvert.DeserializeObject<CreateToDoModel>(requestBody);
         var todo = new ToDoModel { TaskDescription = input?.TaskDescription };
-        _toDos.Add(todo);
+        var entity = this._mapper.Map<TodoTableEntity>(todo);
 
-        return new CreatedAtRouteResult(nameof(GetAllToDos), todo);
+        await table.AddEntityAsync(entity);
+
+        return new CreatedAtRouteResult("GetAllTodos", todo);
     }
 
+    /*
     [FunctionName(nameof(GetAllToDos))]
     public async Task<IActionResult> GetAllToDos([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo")] HttpRequest req, ILogger log)
     {
@@ -121,4 +118,5 @@ public class ToDoApi
 
         return new NoContentResult();
     }
+    */
 }
