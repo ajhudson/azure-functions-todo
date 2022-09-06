@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
@@ -13,8 +14,10 @@ using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Randolph.ToDoFunctionApp;
 
-public static class ToDoApi
+public class ToDoApi
 {
+    private readonly IMapper _mapper;
+    
     private static List<ToDoModel> _toDos = new();
 
     public static List<ToDoModel> ToDos
@@ -24,12 +27,17 @@ public static class ToDoApi
         set => _toDos = value;
     }
 
+    public ToDoApi(IMapper mapper)
+    {
+        this._mapper = mapper;
+    }
+
     [FunctionName(nameof(CreateToDo))]
-    public static async Task<IActionResult> CreateToDo([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo")] HttpRequest req, ILogger log)
+    public async Task<IActionResult> CreateToDo([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo")] HttpRequest req, ILogger log)
     {
         log.LogInformation("Adding an item to the ToDo list");
         string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-        var input = JsonSerializer.Deserialize<CreateToDoModel>(requestBody);
+        var input = JsonConvert.DeserializeObject<CreateToDoModel>(requestBody);
         var todo = new ToDoModel { TaskDescription = input?.TaskDescription };
         _toDos.Add(todo);
 
@@ -37,7 +45,7 @@ public static class ToDoApi
     }
 
     [FunctionName(nameof(GetAllToDos))]
-    public static async Task<IActionResult> GetAllToDos([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo")] HttpRequest req, ILogger log)
+    public async Task<IActionResult> GetAllToDos([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo")] HttpRequest req, ILogger log)
     {
         log.LogInformation("Getting all ToDo's");
         await Task.CompletedTask;
@@ -46,7 +54,7 @@ public static class ToDoApi
     }
 
     [FunctionName(nameof(GetTodoById))]
-    public static async Task<IActionResult> GetTodoById([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo/{id}")] HttpRequest req, string id, ILogger log)
+    public async Task<IActionResult> GetTodoById([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo/{id}")] HttpRequest req, string id, ILogger log)
     {
         log.LogInformation("Getting an todo for {Result}", id);
 
@@ -57,7 +65,7 @@ public static class ToDoApi
     }
 
     [FunctionName(nameof(MarkToDoAsDone))]
-    public static async Task<IActionResult> MarkToDoAsDone([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo/{id}")]HttpRequest req, string id, ILogger log)
+    public async Task<IActionResult> MarkToDoAsDone([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo/{id}")]HttpRequest req, string id, ILogger log)
     {
         log.LogInformation("Marking ToDo {Id} as completed", id);
 
@@ -76,7 +84,7 @@ public static class ToDoApi
     }
 
     [FunctionName(nameof(UpdateToDo))]
-    public static async Task<IActionResult> UpdateToDo([HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "todo/{id}")]HttpRequest req, string id, ILogger log)
+    public async Task<IActionResult> UpdateToDo([HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "todo/{id}")]HttpRequest req, string id, ILogger log)
     {
         log.LogInformation("Updating ToDo {Id}", id);
 
@@ -96,11 +104,13 @@ public static class ToDoApi
     }
 
     [FunctionName(nameof(DeleteToDo))]
-    public static async Task<IActionResult> DeleteToDo([HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "todo/{id}")]HttpRequest request, string id, ILogger log)
+    public async Task<IActionResult> DeleteToDo([HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "todo/{id}")]HttpRequest request, string id, ILogger log)
     {
         log.LogInformation("Deleting ToDo {Id}", id);
 
         var todo = _toDos.SingleOrDefault(x => x.Id == id);
+
+        await Task.CompletedTask;
 
         if (todo == null)
         {

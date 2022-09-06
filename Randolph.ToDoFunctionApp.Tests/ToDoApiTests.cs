@@ -1,7 +1,9 @@
+using AutoMapper;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Randolph.ToDoFunctionApp.MappingProfiles;
 using Randolph.ToDoFunctionApp.Models;
 using Randolph.ToDoFunctionApp.Tests.CustomAttributes;
 using Shouldly;
@@ -10,7 +12,7 @@ using Xunit.Abstractions;
 namespace Randolph.ToDoFunctionApp.Tests;
 
 [TestCaseOrderer("Randolph.ToDoFunctionApp.Tests.UnitTestOrderers.AscendingNumberOrderer", "Randolph.ToDoFunctionApp.Tests")]
-public class ToDoApi : TestsBase, IClassFixture<IdFixture>
+public class ToDoApiTests : TestsBase, IClassFixture<IdFixture>
 {
     private readonly Mock<HttpRequest> _httpRequest;
 
@@ -20,12 +22,22 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
 
     private readonly IdFixture _idFixture;
 
-    public ToDoApi(ITestOutputHelper output, IdFixture idFixture)
+    private readonly ToDoApi _toDoApi;
+
+    public ToDoApiTests(ITestOutputHelper output, IdFixture idFixture)
     {
         this._httpRequest = new Mock<HttpRequest>();
         this._logger = new Mock<ILogger>();
         this._output = output;
         this._idFixture = idFixture;
+
+        var mappingConfig = new MapperConfiguration(cfg =>
+        {
+            cfg.AddProfile<ToDoMappingProfile>();
+        });
+
+        var mapper = mappingConfig.CreateMapper();
+        this._toDoApi = new ToDoApi(mapper);
     }
 
     [Fact]
@@ -39,7 +51,7 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
         this._httpRequest.Setup(x => x.Body).Returns(body);
 
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.CreateToDo(this._httpRequest.Object, _logger.Object) as CreatedAtRouteResult;
+        var response = await this._toDoApi.CreateToDo(this._httpRequest.Object, _logger.Object) as CreatedAtRouteResult;
 
         // Assert
         response.ShouldNotBeNull();
@@ -57,7 +69,7 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
     {
         // Arrange
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.GetAllToDos(this._httpRequest.Object, this._logger.Object) as OkObjectResult;
+        var response = await this._toDoApi.GetAllToDos(this._httpRequest.Object, this._logger.Object) as OkObjectResult;
 
         // Assert
         response.ShouldNotBeNull();
@@ -75,7 +87,7 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
     {
         // Arrange
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.GetTodoById(this._httpRequest.Object, this._idFixture.Id, this._logger.Object) as OkObjectResult;
+        var response = await this._toDoApi.GetTodoById(this._httpRequest.Object, this._idFixture.Id, this._logger.Object) as OkObjectResult;
 
         // Assert
         response.ShouldNotBeNull();
@@ -93,7 +105,7 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
     {
         // Arrange
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.MarkToDoAsDone(this._httpRequest.Object, this._idFixture.Id, this._logger.Object) as NoContentResult;
+        var response = await this._toDoApi.MarkToDoAsDone(this._httpRequest.Object, this._idFixture.Id, this._logger.Object) as NoContentResult;
         
         // Assert
         response.ShouldNotBeNull();
@@ -108,7 +120,7 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
         string id = Guid.NewGuid().ToString("n");
         
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.MarkToDoAsDone(this._httpRequest.Object, id, this._logger.Object) as NotFoundObjectResult;
+        var response = await this._toDoApi.MarkToDoAsDone(this._httpRequest.Object, id, this._logger.Object) as NotFoundObjectResult;
         
         // Assert
         response.ShouldNotBeNull();
@@ -121,7 +133,7 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
     {
         // Arrange
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.UpdateToDo(this._httpRequest.Object, Guid.NewGuid().ToString("n"), this._logger.Object) as NotFoundObjectResult;
+        var response = await this._toDoApi.UpdateToDo(this._httpRequest.Object, Guid.NewGuid().ToString("n"), this._logger.Object) as NotFoundObjectResult;
 
         // Assert
         response.ShouldNotBeNull();
@@ -143,7 +155,7 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
         this._httpRequest.SetupGet(x => x.Body).Returns(body);
 
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.UpdateToDo(this._httpRequest.Object, id, this._logger.Object) as NoContentResult;
+        var response = await this._toDoApi.UpdateToDo(this._httpRequest.Object, id, this._logger.Object) as NoContentResult;
 
         // Assert
         response.ShouldNotBeNull();
@@ -158,7 +170,7 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
         var id = Guid.NewGuid().ToString("n");
 
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.DeleteToDo(this._httpRequest.Object, id, this._logger.Object) as NotFoundObjectResult;
+        var response = await this._toDoApi.DeleteToDo(this._httpRequest.Object, id, this._logger.Object) as NotFoundObjectResult;
 
         // Assert
         response.ShouldNotBeNull();
@@ -171,11 +183,11 @@ public class ToDoApi : TestsBase, IClassFixture<IdFixture>
     {
         // Arrange
         var id = Guid.NewGuid().ToString("n");
-        var todo = new ToDoModel { Id = id, CreatedAt = DateTime.Now, TaskDescription = "Declutter bookshelf" };
-        ToDoFunctionApp.ToDoApi.ToDos = new List<ToDoModel> { todo };
+        var todo = new ToDoModel { Id = id, CreatedAt = DateTime.Now, TaskDescription = "De-clutter bookshelf" };
+        ToDoApi.ToDos = new List<ToDoModel> { todo };
         
         // Act
-        var response = await ToDoFunctionApp.ToDoApi.DeleteToDo(this._httpRequest.Object, id, this._logger.Object) as NoContentResult;
+        var response = await this._toDoApi.DeleteToDo(this._httpRequest.Object, id, this._logger.Object) as NoContentResult;
         
         // Assert
         response.ShouldNotBeNull();
