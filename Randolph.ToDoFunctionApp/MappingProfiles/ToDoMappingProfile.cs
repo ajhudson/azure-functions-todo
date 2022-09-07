@@ -10,7 +10,7 @@ public class ToDoMappingProfile : Profile
     public ToDoMappingProfile()
     {
         this.CreateMap<ToDoModel, TodoTableEntity>()
-            .ForMember(e => e.PartitionKey, opts => opts.MapFrom(_ => "TODO"))
+            .ForMember(e => e.PartitionKey, opts => opts.MapFrom(_ => Constants.PartitionKey))
             .ForMember(e => e.RowKey, opts => opts.MapFrom(m => m.Id))
             .ForMember(e => e.CreatedDt, opts => opts.MapFrom(_ => DateTime.UtcNow))
             .ReverseMap()

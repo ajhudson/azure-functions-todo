@@ -1,6 +1,8 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using AutoMapper;
+using Azure;
 using Azure.Data.Tables;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
@@ -10,7 +12,6 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Randolph.ToDoFunctionApp.Entities;
 using Randolph.ToDoFunctionApp.Models;
-using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Randolph.ToDoFunctionApp;
 
@@ -26,7 +27,7 @@ public class ToDoApi
     [FunctionName(nameof(CreateToDo))]
     public async Task<IActionResult> CreateToDo(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo")] HttpRequest req,
-        [Table(Constants.ToDoTableName)] TableClient table,
+        [Table(Constants.ToDoTableName)] TableClient tableClient,
         ILogger log)
     {
         log.LogInformation("Adding an item to the ToDo list");
@@ -35,21 +36,36 @@ public class ToDoApi
         var todo = new ToDoModel { TaskDescription = input?.TaskDescription };
         var entity = this._mapper.Map<TodoTableEntity>(todo);
 
-        await table.AddEntityAsync(entity);
+        Response response = await tableClient.AddEntityAsync(entity);
 
         return new CreatedAtRouteResult("GetAllTodos", todo);
     }
-
-    /*
+    
     [FunctionName(nameof(GetAllToDos))]
-    public async Task<IActionResult> GetAllToDos([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo")] HttpRequest req, ILogger log)
+    public async Task<IActionResult> GetAllToDos(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo")] HttpRequest req, 
+        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        ILogger log)
     {
         log.LogInformation("Getting all ToDo's");
-        await Task.CompletedTask;
+        
+        var queryResults = tableClient.QueryAsync<TodoTableEntity>();
 
-        return new OkObjectResult(_toDos);
+        var results = new List<ToDoModel>();
+        
+        await foreach (var currentPage in queryResults.AsPages())
+        {
+            foreach (var currentValue in currentPage.Values)
+            {
+                var model = this._mapper.Map<ToDoModel>(currentValue);
+                results.Add(model);
+            }
+        }
+
+        return new OkObjectResult(results);
     }
 
+    /*
     [FunctionName(nameof(GetTodoById))]
     public async Task<IActionResult> GetTodoById([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo/{id}")] HttpRequest req, string id, ILogger log)
     {
