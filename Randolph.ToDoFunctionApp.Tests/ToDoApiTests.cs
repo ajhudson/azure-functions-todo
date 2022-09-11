@@ -176,88 +176,153 @@ public class ToDoApiTests : TestsBase
         
         this._tableClient.Verify(x => x.UpdateEntityAsync(It.Is<TodoTableEntity>(e => e.IsCompleted == true), It.IsAny<ETag>(), It.IsAny<TableUpdateMode>(), It.IsAny<CancellationToken>()), Times.Once);
     }
-
-    /*
+    
     [Fact]
-    [OrderTestByAscendingNumber(5)]
     public async Task ShouldReturnNotFoundForNonExistentToDo()
     {
         // Arrange
-        string id = Guid.NewGuid().ToString("n");
+        var id = Guid.NewGuid();
+        var empty = Array.Empty<TodoTableEntity>().ToList();
+        var results = AsyncPageable<TodoTableEntity>.FromPages(new List<Page<TodoTableEntity>>
+        {
+            Page<TodoTableEntity>.FromValues(empty, null, Mock.Of<Response>())
+        });
+
+        this._tableClient.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
+            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(results);
+        
+        this._tableClient.Setup(x => x.UpdateEntityAsync(It.Is<TodoTableEntity>(e => e.IsCompleted == true), It.IsAny<ETag>(), It.IsAny<TableUpdateMode>(), It.IsAny<CancellationToken>())).Verifiable();
+
         
         // Act
-        var response = await this._toDoApi.MarkToDoAsDone(this._httpRequest.Object, id, this._logger.Object) as NotFoundObjectResult;
+        var response = await this._toDoApi.MarkToDoAsDone(this._httpRequest.Object, this._tableClient.Object, id, this._logger.Object) as NotFoundObjectResult;
         
         // Assert
         response.ShouldNotBeNull();
         response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+        this._tableClient.Verify(x => x.UpdateEntityAsync(It.Is<TodoTableEntity>(e => e.IsCompleted == true), It.IsAny<ETag>(), It.IsAny<TableUpdateMode>(), It.IsAny<CancellationToken>()), Times.Never);
     }
     
     [Fact]
-    [OrderTestByAscendingNumber(6)]
     public async Task ShouldReturnNotFoundWhenUpdateToDoIsCalled()
     {
         // Arrange
+        var id = Guid.NewGuid();
+
+        var empty = Array.Empty<TodoTableEntity>().ToList();
+        var results = AsyncPageable<TodoTableEntity>.FromPages(new List<Page<TodoTableEntity>>
+        {
+            Page<TodoTableEntity>.FromValues(empty, null, Mock.Of<Response>())
+        });
+
+        this._tableClient.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
+            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(results);
+        
+        this._tableClient.Setup(x => x.UpdateEntityAsync(It.Is<TodoTableEntity>(e => e.IsCompleted == true), It.IsAny<ETag>(), It.IsAny<TableUpdateMode>(), It.IsAny<CancellationToken>())).Verifiable();
+        
+        
         // Act
-        var response = await this._toDoApi.UpdateToDo(this._httpRequest.Object, Guid.NewGuid().ToString("n"), this._logger.Object) as NotFoundObjectResult;
+        var response = await this._toDoApi.UpdateToDo(this._httpRequest.Object, this._tableClient.Object, id, this._logger.Object) as NotFoundObjectResult;
 
         // Assert
         response.ShouldNotBeNull();
         response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+        this._tableClient.Verify(x => x.UpdateEntityAsync(It.Is<TodoTableEntity>(e => e.IsCompleted == true), It.IsAny<ETag>(), It.IsAny<TableUpdateMode>(), It.IsAny<CancellationToken>()), Times.Never);
     }
     
     [Fact]
-    [OrderTestByAscendingNumber(7)]
     public async Task ShouldReturnNoContentWhenToDoIsUpdated()
     {
         // Arrange
-        var id = Guid.NewGuid().ToString("n");
-        var toDo = new ToDoModel { Id = id, TaskDescription = "Dusting", CreatedAt = DateTime.Now };
-        ToDoFunctionApp.ToDoApi.ToDos = new List<ToDoModel> { toDo };
+        var id = Guid.NewGuid();
 
-        toDo.TaskDescription = "Dusting and washing up";
+        var model = new ToDoModel { ToDoId = id, TaskDescription = "Updated ToDo" };
+        var stream = await CreateStreamForHttpRequest(model);
+        this._httpRequest.SetupGet(x => x.Body).Returns(stream);
 
-        var body = await CreateStreamForHttpRequest(toDo);
-        this._httpRequest.SetupGet(x => x.Body).Returns(body);
+        var toDoEntity = new TodoTableEntity
+        {
+            CreatedDt = DateTime.UtcNow,
+            PartitionKey = Constants.PartitionKey,
+            TaskDescription = "Original ToDo",
+            RowKey = id.ToString("n")
+        };
+
+        var results = AsyncPageable<TodoTableEntity>.FromPages(new List<Page<TodoTableEntity>>
+        {
+            Page<TodoTableEntity>.FromValues(new[] { toDoEntity }, null, Mock.Of<Response>())
+        });
+        
+        this._tableClient.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
+            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(results);
+        
+        this._tableClient.Setup(x => x.UpdateEntityAsync(It.IsAny<TodoTableEntity>(), It.IsAny<ETag>(), It.IsAny<TableUpdateMode>(), It.IsAny<CancellationToken>())).Verifiable();
+
 
         // Act
-        var response = await this._toDoApi.UpdateToDo(this._httpRequest.Object, id, this._logger.Object) as NoContentResult;
+        var response = await this._toDoApi.UpdateToDo(this._httpRequest.Object, this._tableClient.Object, id, this._logger.Object) as NoContentResult;
 
         // Assert
         response.ShouldNotBeNull();
-        response.StatusCode.ShouldBe(StatusCodes.Status204NoContent);        
+        response.StatusCode.ShouldBe(StatusCodes.Status204NoContent);    
+        this._tableClient.Verify(x => x.UpdateEntityAsync(It.IsAny<TodoTableEntity>(), It.IsAny<ETag>(), It.IsAny<TableUpdateMode>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    
     [Fact]
-    [OrderTestByAscendingNumber(8)]
     public async Task ShouldReturnNotFoundWhenDeleteToDoIsCalled()
     {
         // Arrange
-        var id = Guid.NewGuid().ToString("n");
+        var id = Guid.NewGuid();
+        var empty = Array.Empty<TodoTableEntity>().ToList();
+        
+        var results = AsyncPageable<TodoTableEntity>.FromPages(new List<Page<TodoTableEntity>>
+        {
+            Page<TodoTableEntity>.FromValues(empty, null, Mock.Of<Response>())
+        });
+        
+        this._tableClient.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
+            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(results);
+        
+        this._tableClient.Setup(x => x.DeleteEntityAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ETag>(), It.IsAny<CancellationToken>())).Verifiable();
 
         // Act
-        var response = await this._toDoApi.DeleteToDo(this._httpRequest.Object, id, this._logger.Object) as NotFoundObjectResult;
+        var response = await this._toDoApi.DeleteToDo(this._httpRequest.Object, this._tableClient.Object, id, this._logger.Object) as NotFoundObjectResult;
 
         // Assert
         response.ShouldNotBeNull();
         response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+        this._tableClient.Verify(x => x.DeleteEntityAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ETag>(), It.IsAny<CancellationToken>()), Times.Never);
     }
-
+    
     [Fact]
-    [OrderTestByAscendingNumber(9)]
     public async Task ShouldReturnNoContentWhenToDoIsDeleted()
     {
         // Arrange
-        var id = Guid.NewGuid().ToString("n");
-        var todo = new ToDoModel { Id = id, CreatedAt = DateTime.Now, TaskDescription = "De-clutter bookshelf" };
-        ToDoApi.ToDos = new List<ToDoModel> { todo };
+        var id = Guid.NewGuid();
+        var todo = new ToDoModel { ToDoId = id, CreatedAt = DateTime.Now, TaskDescription = "De-clutter bookshelf" };
+
+        var entities = new List<TodoTableEntity>
+        {
+            new() { RowKey = id.ToString("n"), CreatedDt = todo.CreatedAt, TaskDescription = todo.TaskDescription }
+        };
         
+        var results = AsyncPageable<TodoTableEntity>.FromPages(new List<Page<TodoTableEntity>>
+        {
+            Page<TodoTableEntity>.FromValues(entities, null, Mock.Of<Response>())
+        });
+        
+        this._tableClient.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
+            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(results);
+        
+        this._tableClient.Setup(x => x.DeleteEntityAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ETag>(), It.IsAny<CancellationToken>())).Verifiable();
+
         // Act
-        var response = await this._toDoApi.DeleteToDo(this._httpRequest.Object, id, this._logger.Object) as NoContentResult;
+        var response = await this._toDoApi.DeleteToDo(this._httpRequest.Object, this._tableClient.Object, id, this._logger.Object) as NoContentResult;
         
         // Assert
         response.ShouldNotBeNull();
         response.StatusCode.ShouldBe(StatusCodes.Status204NoContent);
+        this._tableClient.Verify(x => x.DeleteEntityAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ETag>(), It.IsAny<CancellationToken>()), Times.Once);
     }
-    */
 }

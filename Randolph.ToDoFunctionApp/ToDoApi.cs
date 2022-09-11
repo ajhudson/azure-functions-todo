@@ -14,6 +14,7 @@ using Newtonsoft.Json;
 using Randolph.ToDoFunctionApp.Entities;
 using Randolph.ToDoFunctionApp.Extensions;
 using Randolph.ToDoFunctionApp.Models;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Randolph.ToDoFunctionApp;
 
@@ -91,45 +92,50 @@ public class ToDoApi
 
         return new NoContentResult();
     }
-
-    /*
+    
     [FunctionName(nameof(UpdateToDo))]
-    public async Task<IActionResult> UpdateToDo([HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "todo/{id}")]HttpRequest req, string id, ILogger log)
+    public async Task<IActionResult> UpdateToDo(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "todo/{id}")]HttpRequest req,
+        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        Guid id, 
+        ILogger log)
     {
         log.LogInformation("Updating ToDo {Id}", id);
 
-        var idx = _toDos.FindIndex(x => x.Id == id);
+        var entity = await tableClient.QueryAsync<TodoTableEntity>(entity => entity.RowKey == id.ToString("n")).SingleOrDefaultAsync();
 
-        if (idx == -1)
+        if (entity == null)
         {
             return new NotFoundObjectResult(new { id });
         }
+        
+        var todo = JsonSerializer.Deserialize<ToDoModel>(req.Body);
+        var updatedEntity = this._mapper.Map<TodoTableEntity>(todo);
+        updatedEntity.RowKey = entity.RowKey;
 
-        string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-        var todo = JsonSerializer.Deserialize<ToDoModel>(requestBody);
-
-        _toDos[idx] = todo;
+        await tableClient.UpdateEntityAsync(updatedEntity, ETag.All);
         
         return new NoContentResult();
     }
-
+    
     [FunctionName(nameof(DeleteToDo))]
-    public async Task<IActionResult> DeleteToDo([HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "todo/{id}")]HttpRequest request, string id, ILogger log)
+    public async Task<IActionResult> DeleteToDo(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "todo/{id}")]HttpRequest request,
+        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        Guid id, 
+        ILogger log)
     {
         log.LogInformation("Deleting ToDo {Id}", id);
 
-        var todo = _toDos.SingleOrDefault(x => x.Id == id);
-
-        await Task.CompletedTask;
+        var todo = await tableClient.QueryAsync<TodoTableEntity>(entity => entity.RowKey == id.ToString("n")).SingleOrDefaultAsync();
 
         if (todo == null)
         {
             return new NotFoundObjectResult(new { id });
         }
 
-        _toDos.Remove(todo);
+        await tableClient.DeleteEntityAsync(Constants.PartitionKey, id.ToString("n"));
 
         return new NoContentResult();
     }
-    */
 }
