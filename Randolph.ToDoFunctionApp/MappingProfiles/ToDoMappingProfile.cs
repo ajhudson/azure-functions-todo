@@ -15,5 +15,7 @@ public class ToDoMappingProfile : Profile
             .ForMember(e => e.CreatedDt, opts => opts.MapFrom(_ => DateTime.UtcNow))
             .ReverseMap()
             .ForMember(m => m.ToDoId, opts => opts.MapFrom(e => e.RowKey));
+
+        this.CreateMap<UpdateToDoModel, TodoTableEntity>();
     }
 }

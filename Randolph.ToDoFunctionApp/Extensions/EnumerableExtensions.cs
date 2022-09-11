@@ -12,7 +12,7 @@ public static class EnumerableExtensions
         Func<T, TModel> mapperFunc,
         Expression<Func<T, bool>> query = null) where T : class, ITableEntity, new()
     {
-        var queryResults = tableClient.QueryAsync(query);
+        var queryResults = query != null ? tableClient.QueryAsync(query) : tableClient.QueryAsync<T>();
 
         await foreach (var currentPage in queryResults.AsPages())
         {

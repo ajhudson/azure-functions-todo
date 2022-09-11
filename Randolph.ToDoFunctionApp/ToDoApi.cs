@@ -108,10 +108,13 @@ public class ToDoApi
         {
             return new NotFoundObjectResult(new { id });
         }
-        
-        var todo = JsonSerializer.Deserialize<ToDoModel>(req.Body);
+
+        string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+        var todo = JsonConvert.DeserializeObject<UpdateToDoModel>(requestBody);
         var updatedEntity = this._mapper.Map<TodoTableEntity>(todo);
+        updatedEntity.CreatedDt = entity.CreatedDt;
         updatedEntity.RowKey = entity.RowKey;
+        updatedEntity.PartitionKey = Constants.PartitionKey;
 
         await tableClient.UpdateEntityAsync(updatedEntity, ETag.All);
         
