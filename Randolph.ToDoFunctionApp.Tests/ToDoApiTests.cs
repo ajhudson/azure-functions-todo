@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using AutoMapper;
 using Azure;
 using Azure.Data.Tables;
@@ -8,14 +9,12 @@ using Moq;
 using Randolph.ToDoFunctionApp.Entities;
 using Randolph.ToDoFunctionApp.MappingProfiles;
 using Randolph.ToDoFunctionApp.Models;
-using Randolph.ToDoFunctionApp.Tests.CustomAttributes;
 using Shouldly;
 using Xunit.Abstractions;
 
 namespace Randolph.ToDoFunctionApp.Tests;
 
-[TestCaseOrderer("Randolph.ToDoFunctionApp.Tests.UnitTestOrderers.AscendingNumberOrderer", "Randolph.ToDoFunctionApp.Tests")]
-public class ToDoApiTests : TestsBase, IClassFixture<IdFixture>
+public class ToDoApiTests : TestsBase
 {
     private readonly Mock<HttpRequest> _httpRequest;
 
@@ -25,17 +24,14 @@ public class ToDoApiTests : TestsBase, IClassFixture<IdFixture>
     
     private readonly ITestOutputHelper _output;
 
-    private readonly IdFixture _idFixture;
-
     private readonly ToDoApi _toDoApi;
 
-    public ToDoApiTests(ITestOutputHelper output, IdFixture idFixture)
+    public ToDoApiTests(ITestOutputHelper output)
     {
         this._httpRequest = new Mock<HttpRequest>();
         this._tableClient = new Mock<TableClient>();
         this._logger = new Mock<ILogger>();
         this._output = output;
-        this._idFixture = idFixture;
 
         var mappingConfig = new MapperConfiguration(cfg =>
         {
@@ -47,7 +43,6 @@ public class ToDoApiTests : TestsBase, IClassFixture<IdFixture>
     }
     
     [Fact]
-    [OrderTestByAscendingNumber(1)]
     public async Task ShouldAddTodo()
     {
         // Arrange
@@ -68,21 +63,25 @@ public class ToDoApiTests : TestsBase, IClassFixture<IdFixture>
 
         var responseModel = response.Value as ToDoModel;
         responseModel.ShouldNotBeNull();
-        this._idFixture.Id = responseModel.Id;
-        this._output.WriteLine($"ToDo created with ID of {responseModel.Id}");
+        responseModel.ToDoId.ShouldNotBe(Guid.Empty);
+        this._output.WriteLine($"ToDo created with ID of {responseModel.ToDoId}");
     }
     
     [Fact]
-    [OrderTestByAscendingNumber(2)]
     public async Task ShouldGetAllToDos()
     {
         // Arrange
+        const string TaskDescription = "Clean crap up";
+
+        var id = Guid.NewGuid();
+        
         var entity = new TodoTableEntity
         {
+            RowKey = id.ToString("n"),
             PartitionKey = Constants.PartitionKey,
             CreatedDt = DateTime.UtcNow,
             IsCompleted = false,
-            TaskDescription = "Clean crap up"
+            TaskDescription = TaskDescription
         };
 
         var results = AsyncPageable<TodoTableEntity>.FromPages(new List<Page<TodoTableEntity>>
@@ -90,30 +89,45 @@ public class ToDoApiTests : TestsBase, IClassFixture<IdFixture>
             Page<TodoTableEntity>.FromValues(new[] { entity }, null, Mock.Of<Response>())
         });
 
-        this._tableClient.Setup(x => x.QueryAsync<TodoTableEntity>(It.IsAny<string>(), It.IsAny<int?>(),
+        this._tableClient.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
             It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(results);
         
         // Act
-        var response = await this._toDoApi.GetAllToDos(this._httpRequest.Object, this._tableClient.Object, this._logger.Object) as OkObjectResult;
+        var response = this._toDoApi.GetAllToDos(this._httpRequest.Object, this._tableClient.Object, this._logger.Object) as OkObjectResult;
 
         // Assert
         response.ShouldNotBeNull();
         response.StatusCode.ShouldBe(StatusCodes.Status200OK);
-        
-        var allToDos = response.Value as List<ToDoModel>;
-        allToDos.ShouldNotBeNull();
-        allToDos.Count.ShouldBe(1);
-        allToDos.Any(todo => todo.Id == this._idFixture.Id).ShouldBeTrue();
-    }
 
-    /*
+        var asyncToDos = response.Value as IAsyncEnumerable<ToDoModel>;
+        var allToDos = await asyncToDos!.ToListAsync();
+        allToDos.Count.ShouldBe(1);
+        allToDos.Any(todo => todo.TaskDescription == TaskDescription).ShouldBeTrue();
+    }
+    
     [Fact]
-    [OrderTestByAscendingNumber(3)]
     public async Task ShouldGetToDoById()
     {
         // Arrange
+        var id = Guid.NewGuid();
+        var entity = new TodoTableEntity
+        {
+            RowKey = id.ToString("n"),
+            CreatedDt = DateTime.UtcNow,
+            TaskDescription = "Wake up",
+            PartitionKey = Constants.PartitionKey
+        };
+    
+        var results = AsyncPageable<TodoTableEntity>.FromPages(new List<Page<TodoTableEntity>>
+        {
+            Page<TodoTableEntity>.FromValues(new[] { entity }, null, Mock.Of<Response>())
+        });
+
+        this._tableClient.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
+            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(results);
+
         // Act
-        var response = await this._toDoApi.GetTodoById(this._httpRequest.Object, this._idFixture.Id, this._logger.Object) as OkObjectResult;
+        var response = await this._toDoApi.GetTodoById(this._httpRequest.Object, this._tableClient.Object, id, this._logger.Object) as OkObjectResult;
 
         // Assert
         response.ShouldNotBeNull();
@@ -121,23 +135,49 @@ public class ToDoApiTests : TestsBase, IClassFixture<IdFixture>
 
         var todo = response.Value as ToDoModel;
         todo.ShouldNotBeNull();
-        todo.Id.ShouldBe(this._idFixture.Id);
+        todo.ToDoId.ShouldBe(id);
         todo.IsCompleted.ShouldBeFalse();
     }
-
+    
     [Fact]
-    [OrderTestByAscendingNumber(4)]
     public async Task ShouldMarkToDoAsDone()
     {
         // Arrange
+        var id = Guid.NewGuid();
+
+        var todo = new TodoTableEntity
+        {
+            CreatedDt = DateTime.UtcNow,
+            PartitionKey = Constants.PartitionKey,
+            TaskDescription = "This needs to be marked as done",
+            RowKey = id.ToString("n")
+        };
+
+        var results = AsyncPageable<TodoTableEntity>.FromPages(new List<Page<TodoTableEntity>>
+        {
+            Page<TodoTableEntity>.FromValues(new[] { todo }, null, Mock.Of<Response>())
+        });
+
+        this._tableClient.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
+            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(results);
+        
+        this._tableClient.Setup(x => x.UpdateEntityAsync(It.Is<TodoTableEntity>(e => e.IsCompleted == true), It.IsAny<ETag>(), It.IsAny<TableUpdateMode>(), It.IsAny<CancellationToken>())).Verifiable();
+
+
         // Act
-        var response = await this._toDoApi.MarkToDoAsDone(this._httpRequest.Object, this._idFixture.Id, this._logger.Object) as NoContentResult;
+        var response = await this._toDoApi.MarkToDoAsDone(this._httpRequest.Object, this._tableClient.Object, id, this._logger.Object) as NoContentResult;
         
         // Assert
         response.ShouldNotBeNull();
         response.StatusCode.ShouldBe(StatusCodes.Status204NoContent);
+        
+        this._tableClient.Verify(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
+            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()), Times.Once);
+        
+        this._tableClient.Verify(x => x.UpdateEntityAsync(It.Is<TodoTableEntity>(e => e.IsCompleted == true), It.IsAny<ETag>(), It.IsAny<TableUpdateMode>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /*
     [Fact]
     [OrderTestByAscendingNumber(5)]
     public async Task ShouldReturnNotFoundForNonExistentToDo()

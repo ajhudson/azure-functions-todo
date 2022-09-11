@@ -11,9 +11,9 @@ public class ToDoMappingProfile : Profile
     {
         this.CreateMap<ToDoModel, TodoTableEntity>()
             .ForMember(e => e.PartitionKey, opts => opts.MapFrom(_ => Constants.PartitionKey))
-            .ForMember(e => e.RowKey, opts => opts.MapFrom(m => m.Id))
+            .ForMember(e => e.RowKey, opts => opts.MapFrom(m => m.ToDoId.ToString("n")))
             .ForMember(e => e.CreatedDt, opts => opts.MapFrom(_ => DateTime.UtcNow))
             .ReverseMap()
-            .ForMember(m => m.Id, opts => opts.MapFrom(e => e.RowKey));
+            .ForMember(m => m.ToDoId, opts => opts.MapFrom(e => e.RowKey));
     }
 }

@@ -1,5 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using Azure;
@@ -11,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Randolph.ToDoFunctionApp.Entities;
+using Randolph.ToDoFunctionApp.Extensions;
 using Randolph.ToDoFunctionApp.Models;
 
 namespace Randolph.ToDoFunctionApp;
@@ -33,7 +35,7 @@ public class ToDoApi
         log.LogInformation("Adding an item to the ToDo list");
         string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
         var input = JsonConvert.DeserializeObject<CreateToDoModel>(requestBody);
-        var todo = new ToDoModel { TaskDescription = input?.TaskDescription };
+        var todo = new ToDoModel { ToDoId = Guid.NewGuid(), TaskDescription = input?.TaskDescription };
         var entity = this._mapper.Map<TodoTableEntity>(todo);
 
         Response response = await tableClient.AddEntityAsync(entity);
@@ -42,60 +44,55 @@ public class ToDoApi
     }
     
     [FunctionName(nameof(GetAllToDos))]
-    public async Task<IActionResult> GetAllToDos(
+    public IActionResult GetAllToDos(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo")] HttpRequest req, 
         [Table(Constants.ToDoTableName)] TableClient tableClient,
         ILogger log)
     {
         log.LogInformation("Getting all ToDo's");
         
-        var queryResults = tableClient.QueryAsync<TodoTableEntity>();
-
-        var results = new List<ToDoModel>();
-        
-        await foreach (var currentPage in queryResults.AsPages())
-        {
-            foreach (var currentValue in currentPage.Values)
-            {
-                var model = this._mapper.Map<ToDoModel>(currentValue);
-                results.Add(model);
-            }
-        }
+        var results = tableClient.QueryAllToModelAsync<TodoTableEntity, ToDoModel>(entity => this._mapper.Map<TodoTableEntity, ToDoModel>(entity));
 
         return new OkObjectResult(results);
     }
-
-    /*
+    
     [FunctionName(nameof(GetTodoById))]
-    public async Task<IActionResult> GetTodoById([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo/{id}")] HttpRequest req, string id, ILogger log)
+    public async Task<IActionResult> GetTodoById(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo/{id}")] HttpRequest req,
+        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        Guid id, 
+        ILogger log)
     {
         log.LogInformation("Getting an todo for {Result}", id);
 
-        var todo = _toDos.SingleOrDefault(x => x.Id == id);
-        await Task.CompletedTask;
-        
+        var todo = await tableClient.QueryAllToModelAsync<TodoTableEntity, ToDoModel>(entity => this._mapper.Map<TodoTableEntity, ToDoModel>(entity), e => e.RowKey == id.ToString("n")).SingleOrDefaultAsync();
+
         return todo != null ? new OkObjectResult(todo) : new NotFoundObjectResult(new { id });
     }
-
+    
     [FunctionName(nameof(MarkToDoAsDone))]
-    public async Task<IActionResult> MarkToDoAsDone([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo/{id}")]HttpRequest req, string id, ILogger log)
+    public async Task<IActionResult> MarkToDoAsDone(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo/{id}")]HttpRequest req,
+        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        Guid id, 
+        ILogger log)
     {
         log.LogInformation("Marking ToDo {Id} as completed", id);
 
-        var idx = _toDos.FindIndex(x => x.Id == id);
-
-        if (idx == -1)
+        var entity = await tableClient.QueryAsync<TodoTableEntity>(entity => entity.RowKey == id.ToString("n")).SingleOrDefaultAsync();
+        
+        if (entity == null)
         {
             return new NotFoundObjectResult(new { id });
         }
 
-        _toDos[idx].IsCompleted = true;
-
-        await Task.CompletedTask;
+        entity.IsCompleted = true;
+        await tableClient.UpdateEntityAsync(entity, ETag.All);
 
         return new NoContentResult();
     }
 
+    /*
     [FunctionName(nameof(UpdateToDo))]
     public async Task<IActionResult> UpdateToDo([HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "todo/{id}")]HttpRequest req, string id, ILogger log)
     {

@@ -1,4 +1,5 @@
-﻿using AutoMapper;
+﻿using System.Linq.Expressions;
+using AutoMapper;
 using Azure;
 using Azure.Data.Tables;
 using Moq;
@@ -30,7 +31,7 @@ public class EnumerableExtensionTests
             Page<TodoTableEntity>.FromValues(new [] { CreateEntity("Task 1"), CreateEntity("Task 2") }, null, Mock.Of<Response>())
         });
 
-        tableClientMock.Setup(x => x.QueryAsync<TodoTableEntity>(It.IsAny<string>(), It.IsAny<int?>(),
+        tableClientMock.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
             It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(pages);
 
         // Act
@@ -44,7 +45,7 @@ public class EnumerableExtensionTests
         listOfResults[1].TaskDescription.ShouldBe("Task 2");
     }
 
-    private static TodoTableEntity CreateEntity(string taskDescription) => new TodoTableEntity
+    private static TodoTableEntity CreateEntity(string taskDescription) => new()
     {
         PartitionKey = Constants.PartitionKey,
         CreatedDt = DateTime.UtcNow,

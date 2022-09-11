@@ -4,7 +4,7 @@ namespace Randolph.ToDoFunctionApp.Models;
 
 public class ToDoModel : ToDoModelBase
 {
-    public string Id { get; set; } = Guid.NewGuid().ToString("n");
+    public Guid ToDoId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
