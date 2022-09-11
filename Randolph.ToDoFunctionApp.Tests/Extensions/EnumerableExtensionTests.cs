@@ -31,8 +31,7 @@ public class EnumerableExtensionTests
             Page<TodoTableEntity>.FromValues(new [] { CreateEntity("Task 1"), CreateEntity("Task 2") }, null, Mock.Of<Response>())
         });
 
-        tableClientMock.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
-            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(pages);
+        tableClientMock.Setup(x => x.QueryAsync<TodoTableEntity>(It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(pages);
 
         // Act
         var results = tableClientMock.Object.QueryAllToModelAsync<TodoTableEntity, ToDoModel>(entity => mapper.Map<TodoTableEntity, ToDoModel>(entity));

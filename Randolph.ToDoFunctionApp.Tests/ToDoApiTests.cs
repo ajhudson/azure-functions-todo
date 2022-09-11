@@ -89,8 +89,7 @@ public class ToDoApiTests : TestsBase
             Page<TodoTableEntity>.FromValues(new[] { entity }, null, Mock.Of<Response>())
         });
 
-        this._tableClient.Setup(x => x.QueryAsync(It.IsAny<Expression<Func<TodoTableEntity, bool>>>(), It.IsAny<int?>(),
-            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(results);
+        this._tableClient.Setup(x => x.QueryAsync<TodoTableEntity>(It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())).Returns(results);
         
         // Act
         var response = this._toDoApi.GetAllToDos(this._httpRequest.Object, this._tableClient.Object, this._logger.Object) as OkObjectResult;
