@@ -2,7 +2,7 @@
 
 public class IdFixture : IDisposable
 {
-    public string? Id { get; set; }
+    public Guid? Id { get; set; }
 
     public void Dispose()
     {
