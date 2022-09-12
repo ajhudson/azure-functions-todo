@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using Azure;
 using Azure.Data.Tables;
+using Azure.Storage.Queues;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
@@ -30,7 +31,8 @@ public class ToDoApi
     [FunctionName(nameof(CreateToDo))]
     public async Task<IActionResult> CreateToDo(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo")] HttpRequest req,
-        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        [Table(Constants.ToDoName)] IAsyncCollector<TodoTableEntity> tableClient,
+        [Queue(Constants.ToDoName)] IAsyncCollector<ToDoModel> toDoQueue,
         ILogger log)
     {
         log.LogInformation("Adding an item to the ToDo list");
@@ -38,8 +40,9 @@ public class ToDoApi
         var input = JsonConvert.DeserializeObject<CreateToDoModel>(requestBody);
         var todo = new ToDoModel { ToDoId = Guid.NewGuid(), TaskDescription = input?.TaskDescription };
         var entity = this._mapper.Map<TodoTableEntity>(todo);
-
-        Response response = await tableClient.AddEntityAsync(entity);
+        
+        await tableClient.AddAsync(entity);
+        await toDoQueue.AddAsync(todo);
 
         return new CreatedAtRouteResult("GetAllTodos", todo);
     }
@@ -47,7 +50,7 @@ public class ToDoApi
     [FunctionName(nameof(GetAllToDos))]
     public IActionResult GetAllToDos(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo")] HttpRequest req, 
-        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        [Table(Constants.ToDoName)] TableClient tableClient,
         ILogger log)
     {
         log.LogInformation("Getting all ToDo's");
@@ -60,7 +63,7 @@ public class ToDoApi
     [FunctionName(nameof(GetTodoById))]
     public async Task<IActionResult> GetTodoById(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "todo/{id}")] HttpRequest req,
-        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        [Table(Constants.ToDoName)] TableClient tableClient,
         Guid id, 
         ILogger log)
     {
@@ -74,7 +77,7 @@ public class ToDoApi
     [FunctionName(nameof(MarkToDoAsDone))]
     public async Task<IActionResult> MarkToDoAsDone(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "todo/{id}")]HttpRequest req,
-        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        [Table(Constants.ToDoName)] TableClient tableClient,
         Guid id, 
         ILogger log)
     {
@@ -96,7 +99,7 @@ public class ToDoApi
     [FunctionName(nameof(UpdateToDo))]
     public async Task<IActionResult> UpdateToDo(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "todo/{id}")]HttpRequest req,
-        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        [Table(Constants.ToDoName)] TableClient tableClient,
         Guid id, 
         ILogger log)
     {
@@ -124,7 +127,7 @@ public class ToDoApi
     [FunctionName(nameof(DeleteToDo))]
     public async Task<IActionResult> DeleteToDo(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "todo/{id}")]HttpRequest request,
-        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        [Table(Constants.ToDoName)] TableClient tableClient,
         Guid id, 
         ILogger log)
     {

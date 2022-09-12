@@ -2,7 +2,9 @@
 
 public static class Constants
 {
-    public const string ToDoTableName = "ToDo";
+    public const string ToDoName = "ToDo";
+
+    public const string ToDoBlobContainerName = "todos";
 
     public const string PartitionKey = "TODO";
     

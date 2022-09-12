@@ -4,6 +4,7 @@ using Azure;
 using Azure.Data.Tables;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Randolph.ToDoFunctionApp.Entities;
@@ -20,6 +21,10 @@ public class ToDoApiTests : TestsBase
 
     private readonly Mock<TableClient> _tableClient;
 
+    private readonly Mock<IAsyncCollector<TodoTableEntity>> _tableStorageCollectorMock;
+
+    private readonly Mock<IAsyncCollector<ToDoModel>> _queueCollectorMock;
+
     private readonly Mock<ILogger> _logger;
     
     private readonly ITestOutputHelper _output;
@@ -30,6 +35,8 @@ public class ToDoApiTests : TestsBase
     {
         this._httpRequest = new Mock<HttpRequest>();
         this._tableClient = new Mock<TableClient>();
+        this._tableStorageCollectorMock = new Mock<IAsyncCollector<TodoTableEntity>>();
+        this._queueCollectorMock = new Mock<IAsyncCollector<ToDoModel>>();
         this._logger = new Mock<ILogger>();
         this._output = output;
 
@@ -47,19 +54,23 @@ public class ToDoApiTests : TestsBase
     {
         // Arrange
         var model = new CreateToDoModel { TaskDescription = "Do something nice" };
-        var body = await CreateStreamForHttpRequest(model);
+        await using (var body = await CreateStreamForHttpRequest(model))
+        {
+            this._httpRequest.Setup(x => x.Body).Returns(body);    
+        }
         
-        this._httpRequest.Setup(x => x.Body).Returns(body);
-        this._tableClient.Setup(x => x.AddEntityAsync(It.IsAny<TodoTableEntity>(), It.IsAny<CancellationToken>())).Verifiable();
+        this._tableStorageCollectorMock.Setup(x => x.AddAsync(It.IsAny<TodoTableEntity>(), It.IsAny<CancellationToken>())).Verifiable();
+        this._queueCollectorMock.Setup(x => x.AddAsync(It.IsAny<ToDoModel>(), It.IsAny<CancellationToken>())).Verifiable();
 
         // Act
-        var response = await this._toDoApi.CreateToDo(this._httpRequest.Object, this._tableClient.Object, _logger.Object) as CreatedAtRouteResult;
+        var response = await this._toDoApi.CreateToDo(this._httpRequest.Object, this._tableStorageCollectorMock.Object, this._queueCollectorMock.Object, _logger.Object) as CreatedAtRouteResult;
 
         // Assert
         response.ShouldNotBeNull();
         response.StatusCode.ShouldBe(StatusCodes.Status201Created);
         
-        this._tableClient.Verify(x => x.AddEntityAsync(It.IsAny<TodoTableEntity>(), It.IsAny<CancellationToken>()), Times.Once);
+        this._tableStorageCollectorMock.Verify(x => x.AddAsync(It.IsAny<TodoTableEntity>(), It.IsAny<CancellationToken>()), Times.Once);
+        this._queueCollectorMock.Verify(x => x.AddAsync(It.IsAny<ToDoModel>(), It.IsAny<CancellationToken>()), Times.Once());
 
         var responseModel = response.Value as ToDoModel;
         responseModel.ShouldNotBeNull();
@@ -236,9 +247,11 @@ public class ToDoApiTests : TestsBase
         var id = Guid.NewGuid();
 
         var model = new ToDoModel { ToDoId = id, TaskDescription = "Updated ToDo" };
-        var stream = await CreateStreamForHttpRequest(model);
-        this._httpRequest.SetupGet(x => x.Body).Returns(stream);
-
+        await using (var stream = await CreateStreamForHttpRequest(model))
+        {
+            this._httpRequest.SetupGet(x => x.Body).Returns(stream);    
+        }
+        
         var toDoEntity = new TodoTableEntity
         {
             CreatedDt = DateTime.UtcNow,

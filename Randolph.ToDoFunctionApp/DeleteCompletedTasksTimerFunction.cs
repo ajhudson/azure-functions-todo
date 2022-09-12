@@ -16,7 +16,7 @@ public static class DeleteCompletedTasksTimerFunction
     [FunctionName("DeleteCompletedTasksTimerFunction")]
     public static async Task RunAsync(
         [TimerTrigger("0 */1 * * * *")] TimerInfo myTimer,
-        [Table(Constants.ToDoTableName)] TableClient tableClient,
+        [Table(Constants.ToDoName)] TableClient tableClient,
         ILogger log)
     {
         log.LogInformation("C# Timer trigger function executed at: {UtcNow}", DateTime.UtcNow);
